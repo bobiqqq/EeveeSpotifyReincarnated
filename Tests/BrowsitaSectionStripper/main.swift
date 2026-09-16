@@ -62,4 +62,14 @@ let mixedResult = BrowsitaSectionStripper.strip(mixed, url: scrollURL)
 require(mixedResult != nil && mixedResult!.count < mixed.count,
         "leave-behind section must be removed case-insensitively")
 
+let podcastShow = message(["ordinary music section", "spotify:show:123456789 podcast row"])
+let podcastResult = BrowsitaSectionStripper.strip(podcastShow, url: scrollURL)
+require(podcastResult != nil && podcastResult!.count < podcastShow.count,
+        "spotify:show: section must be stripped")
+
+let audiobookSection = message(["ordinary music section", "spotify:audiobook:abcdef audiobook row"])
+let audiobookResult = BrowsitaSectionStripper.strip(audiobookSection, url: scrollURL)
+require(audiobookResult != nil && audiobookResult!.count < audiobookSection.count,
+        "spotify:audiobook: section must be stripped")
+
 print("BrowsitaSectionStripper regression tests passed")

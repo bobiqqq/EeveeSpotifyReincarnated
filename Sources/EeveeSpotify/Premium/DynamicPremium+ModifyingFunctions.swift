@@ -222,6 +222,35 @@ private let propertyReplacements = [
     EeveePropertyReplacement(name: "enable_sponsored_audiobook_sponsored_ads", modification: .setBool(false)),
     EeveePropertyReplacement(name: "enable_sponsored_podcast_sponsored_ad", modification: .setBool(false)),
     EeveePropertyReplacement(name: "enable_sponsored_podcast_sponsored_ads", modification: .setBool(false)),
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Strip & Disable Podcasts & Audiobooks
+    // ─────────────────────────────────────────────────────────────────────
+    EeveePropertyReplacement(name: "enable_audiobooks", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "enableAudiobooks", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "audiobook_tabs_enabled", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "enable_audiobook_navigation_node", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "fully_support_audiobooks", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "home_audiobooks_sub_feed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "homeAudiobooksSubFeed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "home_audiobooks_bottom_sheet", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "homeAudiobooksBottomSheet", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "npv_scroll_card_audiobooks_enabled", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "home_podcasts", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "homePodcasts", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "home_podcasts_follow", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "homePodcastsFollow", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "home_podcast_follow_feed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "homePodcastFollowFeed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "create_podcast_discovery_feed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "createPodcastDiscoveryFeed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "slotBasedLoadingEnabledOnPodcastsFeed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "slotBasedLoadingEnabledOnAudiobooksFeed", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "enable_video_podcast_switch", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "auto_open_npv_for_video_podcasts", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "signals_video_podcasts_enabled", modification: .setBool(false)),
+    EeveePropertyReplacement(name: "npv_paid_podcast_banner_enabled", modification: .setBool(false)),
+    EeveePropertyReplacement(scope: "ios-feature-yourlibrarypodcast", modification: .remove),
     
     // ─────────────────────────────────────────────────────────────────────
     // Ad on App Open — the "Advertisement" home-screen banner (Pepsi, etc.)
