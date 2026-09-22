@@ -251,6 +251,23 @@ private let propertyReplacements = [
     EeveePropertyReplacement(name: "signals_video_podcasts_enabled", modification: .setBool(false)),
     EeveePropertyReplacement(name: "npv_paid_podcast_banner_enabled", modification: .setBool(false)),
     EeveePropertyReplacement(scope: "ios-feature-yourlibrarypodcast", modification: .remove),
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Native Spotify Listening Stats & Activity (Sound Capsule / Highlights)
+    // ─────────────────────────────────────────────────────────────────────
+    EeveePropertyReplacement(name: "is_list_page_enabled", scope: "ios-feature-sidedrawer-platform", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "enable_highlight_sharing", scope: "ios-system-highlightsstats", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "is_v2_enabled", scope: "ios-highlightsstats-core-impl", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "isV2Enabled", scope: "ios-highlightsstats-core-impl", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "enable_listening_activity_details", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "enableListeningActivityDetails", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "enable_listening_activity", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "enableListeningActivity", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "is_listening_activity_enabled", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "show_view_others_listening_activity_setting", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "nav_header_listening_activity_enabled", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "is_nav_header_listening_activity_enabled", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "publish_listening_activity", modification: .forceBool(true)),
     
     // ─────────────────────────────────────────────────────────────────────
     // Ad on App Open — the "Advertisement" home-screen banner (Pepsi, etc.)

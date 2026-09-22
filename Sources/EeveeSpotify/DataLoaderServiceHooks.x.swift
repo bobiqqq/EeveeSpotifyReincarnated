@@ -49,6 +49,10 @@ class SPTDataLoaderServiceHook: ClassHook<NSObject>, SpotifySessionDelegate {
             return
         }
 
+        if let error = error {
+            writeDebugLog("[NET ERROR] \(url.path): \(error.localizedDescription)")
+        }
+
         guard error == nil, SpotifyResponsePatcher.shouldModify(url) else {
             orig.URLSession(session, task: task, didCompleteWithError: error)
             return
@@ -125,6 +129,18 @@ class SPTDataLoaderServiceHook: ClassHook<NSObject>, SpotifySessionDelegate {
         didReceiveResponse response: HTTPURLResponse,
         completionHandler handler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
+        if let url = task.currentRequest?.url {
+            let statusCode = response.statusCode
+            if statusCode >= 400 {
+                if statusCode == 401 || statusCode == 403 {
+                    let isPlayback = url.path.contains("track-playback") || url.path.contains("metadata") || url.path.contains("spclient")
+                    writeDebugLog("[HTTP \(statusCode)] \(url.path) \(isPlayback ? "(Track restriction / Region / Auth error)" : "(Auth / Forbidden)")")
+                } else if statusCode >= 500 {
+                    writeDebugLog("[HTTP \(statusCode)] Server error on \(url.path)")
+                }
+            }
+        }
+
         if let url = task.currentRequest?.url, url.isCustomize, response.statusCode == 304,
            let cached = SpotifyResponsePatcher.cachedCustomizeData {
             // 304, but our cache holds the already-patched body; force 200 so the
