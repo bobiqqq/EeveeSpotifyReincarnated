@@ -53,7 +53,11 @@ final class EeveeDiagnosticsManager {
     }
 
     var patchTypeDescription: String {
-        UserDefaults.patchType.description
+        switch UserDefaults.patchType {
+        case .notSet: return "Not Set"
+        case .disabled: return "Disabled"
+        case .requests: return "Requests"
+        }
     }
 
     func buildFullReport() -> String {

@@ -17,6 +17,79 @@ var hasShownUnauthorizedPopUp = false
 private let geniusLyricsRepository = GeniusLyricsRepository()
 private let petitLyricsRepository = PetitLyricsRepository()
 
+private func fetchLyricsWithSmartFallback(
+    source: inout LyricsSource,
+    searchQuery: LyricsSearchQuery,
+    options: LyricsOptions
+) throws -> LyricsDto {
+    func repo(for s: LyricsSource) -> LyricsRepository? {
+        switch s {
+        case .genius: return geniusLyricsRepository
+        case .lrclib: return LrclibLyricsRepository.shared
+        case .musixmatch: return MusixmatchLyricsRepository.shared
+        case .petit: return petitLyricsRepository
+        case .spicylyrics: return SpicyLyricsRepository.shared
+        case .notReplaced: return nil
+        }
+    }
+
+    guard let primaryRepo = repo(for: source) else {
+        throw LyricsError.invalidSource
+    }
+
+    var primaryError: Error?
+    do {
+        let result = try primaryRepo.getLyrics(searchQuery, options: options)
+        if !result.lines.isEmpty {
+            EeveeDiagnosticsManager.shared.recordLyrics(
+                source: source.description,
+                status: "OK (\(result.lines.count) lines, synced: \(result.timeSynced))"
+            )
+            return result
+        }
+    } catch {
+        primaryError = error
+        writeDebugLog("[LYRICS] Primary source \(source) failed: \(error)")
+    }
+
+    // Determine fallback candidates
+    var fallbackCandidates: [LyricsSource] = []
+    if source == .genius {
+        fallbackCandidates = [.lrclib, .spicylyrics]
+    } else if source == .lrclib {
+        fallbackCandidates = [.genius, .spicylyrics]
+    } else if source == .spicylyrics {
+        fallbackCandidates = [.lrclib, .genius]
+    } else if source == .musixmatch {
+        fallbackCandidates = [.lrclib, .genius, .spicylyrics]
+    } else {
+        fallbackCandidates = [.lrclib, .genius]
+    }
+
+    for candidate in fallbackCandidates {
+        guard let fallbackRepo = repo(for: candidate) else { continue }
+        if let fallbackResult = try? fallbackRepo.getLyrics(searchQuery, options: options), !fallbackResult.lines.isEmpty {
+            writeDebugLog("[LYRICS] Smart fallback succeeded with \(candidate)")
+            EeveeDiagnosticsManager.shared.recordLyrics(
+                source: "\(candidate.description) (fallback)",
+                status: "OK (\(fallbackResult.lines.count) lines, synced: \(fallbackResult.timeSynced))"
+            )
+            source = candidate
+            return fallbackResult
+        }
+    }
+
+    EeveeDiagnosticsManager.shared.recordLyrics(
+        source: source.description,
+        status: "Failed: \(primaryError?.localizedDescription ?? "No lyrics found")"
+    )
+
+    if let primaryError = primaryError {
+        throw primaryError
+    }
+    throw LyricsError.noSuchSong
+}
+
 // Overload for 9.1.6 where we only have track ID from URL
 private func loadCustomLyricsForTrackId(_ trackId: String) throws -> Lyrics {
 
@@ -184,6 +257,7 @@ private func loadCustomLyricsForCurrentTrack() throws -> Lyrics {
     )
     
     let options = UserDefaults.lyricsOptions
+    var source = UserDefaults.lyricsSource
     var lyricsDto: LyricsDto
     lyricsState = LyricsLoadingState()
     

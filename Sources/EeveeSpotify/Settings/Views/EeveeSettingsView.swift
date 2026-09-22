@@ -151,7 +151,7 @@ struct EeveeSettingsView: View {
                 )
             } label: {
                 NavigationSectionView(
-                    color: .indigo,
+                    color: Color(hex: "#5856D6"),
                     title: "Диагностика и логи",
                     imageSystemName: "stethoscope"
                 )
