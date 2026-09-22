@@ -814,7 +814,7 @@ final class KaraokeButtonOverlay {
         let frame = idealFrame(in: scene)
         lastSceneBoundsSize = scene.coordinateSpace.bounds.size
 
-        let overlayWindow = UIWindow(windowScene: scene)
+        let overlayWindow = KaraokePassthroughWindow(windowScene: scene)
         overlayWindow.frame = frame
         // Screen-visibility gating (isNowPlayingScreenCurrentlyVisible) already
         // limits *when* this shows to the Now Playing screen. This level
@@ -838,31 +838,41 @@ final class KaraokeButtonOverlay {
     }
 }
 
+/// A pass-through window that only absorbs touches directed at interactive controls (like the capsule button)
+/// and lets touches outside the button pass through to Spotify's underlying player views.
+private final class KaraokePassthroughWindow: UIWindow {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hitView = super.hitTest(point, with: event)
+        if hitView === self || hitView === rootViewController?.view {
+            return nil
+        }
+        return hitView
+    }
+}
+
 @available(iOS 15.0, *)
 private struct KaraokeButtonOverlayView: View {
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
     var body: some View {
-        Button(action: { KaraokeOverlayPresenter.present() }) {
-            HStack(spacing: 6) {
-                Image(systemName: "text.bubble.fill")
-                    .font(.system(size: isPhone ? 13 : 11, weight: .semibold))
-                Text("karaoke_word_synced_button".localized)
-                    .font(.system(size: isPhone ? 13 : 11, weight: .semibold))
+        ZStack(alignment: isPhone ? .center : .trailing) {
+            Button(action: { KaraokeOverlayPresenter.present() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "text.bubble.fill")
+                        .font(.system(size: isPhone ? 13 : 11, weight: .semibold))
+                    Text("karaoke_word_synced_button".localized)
+                        .font(.system(size: isPhone ? 13 : 11, weight: .semibold))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, isPhone ? 14 : 11)
+                .padding(.vertical, isPhone ? 10 : 8)
+                .background(Capsule().fill(Color.white.opacity(0.18)))
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
+                .contentShape(Capsule())
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
             }
-            .foregroundColor(.white)
-            .padding(.horizontal, isPhone ? 14 : 11)
-            .padding(.vertical, isPhone ? 10 : 8)
-            .background(Capsule().fill(Color.white.opacity(0.18)))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 2)
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
-        // Alignment within the window's own frame mirrors the window's
-        // origin logic in ensureWindowExists: centered on iPhone, trailing
-        // on iPad. The window itself doesn't span the full screen, so this
-        // just needs to match how much of the window's own width is empty
-        // space around the button on each idiom.
         .frame(
             maxWidth: .infinity,
             maxHeight: .infinity,

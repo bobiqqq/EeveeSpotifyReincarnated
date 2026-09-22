@@ -105,30 +105,11 @@ private func loadCustomLyricsForTrackId(_ trackId: String) throws -> Lyrics {
     )
     
     let options = UserDefaults.lyricsOptions
-    
-    var repository: LyricsRepository
-
-    switch source {
-    case .genius:
-        repository = geniusLyricsRepository
-    case .lrclib:
-        repository = LrclibLyricsRepository.shared
-    case .musixmatch:
-        repository = MusixmatchLyricsRepository.shared
-    case .petit:
-        repository = petitLyricsRepository
-    case .spicylyrics:
-        repository = SpicyLyricsRepository.shared
-    case .notReplaced:
-        throw LyricsError.invalidSource
-    }
-    
-    let lyricsDto: LyricsDto
-    
+    var lyricsDto: LyricsDto
     lyricsState = LyricsLoadingState()
     
     do {
-        lyricsDto = try repository.getLyrics(searchQuery, options: options)
+        lyricsDto = try fetchLyricsWithSmartFallback(source: &source, searchQuery: searchQuery, options: options)
     }
     catch let error {
         if let lyricsError = error as? LyricsError {
@@ -163,19 +144,7 @@ private func loadCustomLyricsForTrackId(_ trackId: String) throws -> Lyrics {
         } else {
             lyricsState.fallbackError = .unknownError
         }
-
-        // Attempt Genius fallback if enabled and the primary source isn't already Genius.
-        // Genius requires title + artist to search — only attempt if we have them.
-        let canFallbackToGenius = source != .genius
-            && UserDefaults.lyricsOptions.geniusFallback
-            && !(currentTitle ?? "").isEmpty
-            && !(currentArtist ?? "").isEmpty
-        if canFallbackToGenius {
-            source = .genius
-            lyricsDto = try geniusLyricsRepository.getLyrics(searchQuery, options: options)
-        } else {
-            throw error
-        }
+        throw error
     }
     
     lyricsState.isEmpty = lyricsDto.lines.isEmpty
@@ -215,32 +184,11 @@ private func loadCustomLyricsForCurrentTrack() throws -> Lyrics {
     )
     
     let options = UserDefaults.lyricsOptions
-    var source = UserDefaults.lyricsSource
-    
-    // switched to swift 5.8 syntax to compile with Theos on Linux.
-    var repository: LyricsRepository
-
-    switch source {
-    case .genius:
-        repository = geniusLyricsRepository
-    case .lrclib:
-        repository = LrclibLyricsRepository.shared
-    case .musixmatch:
-        repository = MusixmatchLyricsRepository.shared
-    case .petit:
-        repository = petitLyricsRepository
-    case .spicylyrics:
-        repository = SpicyLyricsRepository.shared
-    case .notReplaced:
-        throw LyricsError.invalidSource
-    }
-    
-    let lyricsDto: LyricsDto
-    
+    var lyricsDto: LyricsDto
     lyricsState = LyricsLoadingState()
     
     do {
-        lyricsDto = try repository.getLyrics(searchQuery, options: options)
+        lyricsDto = try fetchLyricsWithSmartFallback(source: &source, searchQuery: searchQuery, options: options)
     }
     catch let error {
         if let error = error as? LyricsError {
@@ -277,15 +225,7 @@ private func loadCustomLyricsForCurrentTrack() throws -> Lyrics {
         else {
             lyricsState.fallbackError = .unknownError
         }
-        
-        if source == .genius || !UserDefaults.lyricsOptions.geniusFallback {
-            throw error
-        }
-        
-        source = .genius
-        repository = GeniusLyricsRepository()
-        
-        lyricsDto = try repository.getLyrics(searchQuery, options: options)
+        throw error
     }
     
     lyricsState.isEmpty = lyricsDto.lines.isEmpty

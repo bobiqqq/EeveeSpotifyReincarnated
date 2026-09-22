@@ -31,7 +31,7 @@ class GeniusLyricsRepository: LyricsRepository {
             stringUrl += "?\(queryString)"
         }
         
-        let request = URLRequest(url: URL(string: stringUrl)!)
+        let request = URLRequest(url: URL(string: stringUrl)!, timeoutInterval: 6.0)
 
         let semaphore = DispatchSemaphore(value: 0)
         var data: Data?
@@ -82,9 +82,28 @@ class GeniusLyricsRepository: LyricsRepository {
     }
     
     
+    private func cleanTrackTitle(_ title: String) -> String {
+        var s = title
+        // Remove feat / ft / with parenthetical expressions: (feat. X), [feat X], (with Y)
+        s = s.removeMatches("(?i)\\s*[\\[\\(](?:feat\\.?|ft\\.?|with|featuring)[^\\]\\)]*[\\]\\)]")
+        // Remove remaster / bonus / deluxe / live tags
+        s = s.removeMatches("(?i)\\s*[\\[\\(](?:.*remaster.*|.*deluxe.*|.*edition.*|.*version.*|.*edit.*|.*live.*|.*bonus.*|.*mix.*|.*acoustic.*|.*explicit.*|.*single.*|.*soundtrack.*|.*stereo.*|.*mono.*|.*audio.*)[\\]\\)]")
+        // Remove trailing dash expressions: " - Remastered", " - Live at ...", " - Radio Edit"
+        s = s.removeMatches("(?i)\\s*-\\s*(?:remaster.*|deluxe.*|live.*|bonus.*|radio edit.*|edit|single version.*|acoustic.*|soundtrack.*)")
+        // Remove leftover brackets and quotes
+        s = s.removeMatches("[\\[\\]\"]")
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func cleanArtistName(_ artist: String) -> String {
+        var a = artist
+        a = a.removeMatches("(?i)\\s*(?:feat\\.?|ft\\.?|,|&|/|x|with).*")
+        return a.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func mostRelevantHitResult(
         hits: [GeniusHit],
-        strippedTitle: String,
+        cleanTitle: String,
         primaryArtist: String,
         romanized: Bool,
         hasFoundRomanizedLyrics: inout Bool
@@ -92,12 +111,12 @@ class GeniusLyricsRepository: LyricsRepository {
         let results = hits.map { $0.result }
 
         let matchingByTitle = results.filter {
-            $0.title.containsInsensitive(strippedTitle)
+            $0.title.containsInsensitive(cleanTitle) || cleanTitle.containsInsensitive($0.title)
         }
 
-        let strippedArtist = primaryArtist.strippedTrackTitle
+        let cleanArtist = cleanArtistName(primaryArtist)
         let matchingByBoth = matchingByTitle.filter {
-            $0.artistNames.containsInsensitive(strippedArtist)
+            $0.artistNames.containsInsensitive(cleanArtist)
                 || $0.artistNames.containsInsensitive(primaryArtist)
         }
 
@@ -132,9 +151,27 @@ class GeniusLyricsRepository: LyricsRepository {
     }
     
     func getLyrics(_ query: LyricsSearchQuery, options: LyricsOptions) throws -> LyricsDto {
-        let strippedTitle = query.title.strippedTrackTitle
-        let hits = try searchSong("\(strippedTitle) \(query.primaryArtist)")
-    
+        let cleanTitle = cleanTrackTitle(query.title)
+        let cleanArtist = cleanArtistName(query.primaryArtist)
+
+        var hits: [GeniusHit] = []
+
+        // 1. Attempt with clean title + clean artist
+        if !cleanTitle.isEmpty && !cleanArtist.isEmpty {
+            hits = (try? searchSong("\(cleanTitle) \(cleanArtist)")) ?? []
+        }
+
+        // 2. Attempt with basic stripped title + primary artist
+        if hits.isEmpty {
+            let stripped = query.title.strippedTrackTitle
+            hits = (try? searchSong("\(stripped) \(query.primaryArtist)")) ?? []
+        }
+
+        // 3. Fallback: Search with clean title only
+        if hits.isEmpty && !cleanTitle.isEmpty {
+            hits = (try? searchSong(cleanTitle)) ?? []
+        }
+
         guard !hits.isEmpty else {
             throw LyricsError.noSuchSong
         }
@@ -143,7 +180,7 @@ class GeniusLyricsRepository: LyricsRepository {
         
         let song = mostRelevantHitResult(
             hits: hits,
-            strippedTitle: strippedTitle,
+            cleanTitle: cleanTitle.isEmpty ? query.title : cleanTitle,
             primaryArtist: query.primaryArtist,
             romanized: options.romanization,
             hasFoundRomanizedLyrics: &hasFoundRomanizedLyrics
