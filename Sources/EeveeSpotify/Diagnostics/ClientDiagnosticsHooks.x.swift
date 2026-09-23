@@ -6,7 +6,7 @@ import UIKit
 // for region restrictions, licensing errors, auth failures, and UI popups.
 
 class UIViewControllerPresentationDiagnosticsHook: ClassHook<UIViewController> {
-    func present(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
+    func presentViewController(_ viewControllerToPresent: UIViewController, animated flag: Bool, completion: (() -> Void)? = nil) {
         let clsName = NSStringFromClass(type(of: viewControllerToPresent))
         
         if let alert = viewControllerToPresent as? UIAlertController {
@@ -23,6 +23,6 @@ class UIViewControllerPresentationDiagnosticsHook: ClassHook<UIViewController> {
             writeDebugLog("[UI MODAL] Presented modal: \(clsName)")
         }
         
-        orig.present(viewControllerToPresent, animated: flag, completion: completion)
+        orig.presentViewController(viewControllerToPresent, animated: flag, completion: completion)
     }
 }

@@ -29,5 +29,9 @@ class MPNowPlayingInfoCenterStatsHook: ClassHook<MPNowPlayingInfoCenter> {
             isPlaying: isPlaying,
             position: elapsed
         )
+
+        if let trackId = capturedTrackId, !trackId.isEmpty {
+            prefetchLyricsIfNeeded(trackId: trackId)
+        }
     }
 }

@@ -21,8 +21,8 @@ class SpicyLyricsRepository: LyricsRepository {
     static let shared = SpicyLyricsRepository()
     private init() {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest  = 15
-        config.timeoutIntervalForResource = 15
+        config.timeoutIntervalForRequest  = 3.5
+        config.timeoutIntervalForResource = 4.0
         config.allowsExpensiveNetworkAccess   = true
         config.allowsConstrainedNetworkAccess = true
         config.waitsForConnectivity = false
@@ -43,12 +43,12 @@ class SpicyLyricsRepository: LyricsRepository {
     //
     // Poll for spotifyAccessToken up to `timeout` seconds.
     // Returns the token or nil if not available in time.
-    private func waitForToken(timeout: TimeInterval = 5.0) -> String? {
+    private func waitForToken(timeout: TimeInterval = 1.5) -> String? {
         if let token = spotifyAccessToken { return token }
 
         let deadline = Date(timeIntervalSinceNow: timeout)
         while Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.1)
+            Thread.sleep(forTimeInterval: 0.05)
             if let token = spotifyAccessToken { return token }
         }
         return nil
@@ -56,39 +56,13 @@ class SpicyLyricsRepository: LyricsRepository {
 
     // MARK: - Network
 
-    // Real client behavior (fetchLyrics.ts / LyricsQueueRetry.ts): a 503 means
-    // the server accepted the request but the track's lyrics are still being
-    // generated — it's queued, not missing. The real client shows a "hang
-    // tight" loader and keeps polling indefinitely with backoff
-    // (base=2000ms, factor=1.5x per attempt, capped at 10s) until it
-    // resolves or the track changes. This was previously funneled into
-    // `default` below, which threw .noSuchSong immediately on 503 — that's
-    // what fell straight through to Genius/Musixmatch/Lrclib fallback
-    // (lower-fidelity Line/Static/plain data) instead of getting the real
-    // Syllable data a few seconds later, explaining songs that "sometimes"
-    // come back word-synced and sometimes don't.
-    //
-    // Mirrors the real formula (2000 * 1.5^attempt, capped 10s) but bounded
-    // to 5 retries (~26s total) rather than running indefinitely — this call
-    // is synchronous and blocks the calling background thread, so it can't
-    // loop forever the way the real client's independent setTimeout-driven
-    // controller can. If the track is still queued after that, fall back
-    // like before rather than hanging.
-    private static let queuedRetryDelays: [TimeInterval] = {
-        (0 ..< 5).map { attempt in min(10.0, 2.0 * pow(1.5, Double(attempt))) }
-    }()
-
     private func performQuery(trackId: String) throws -> Data {
-        for (attempt, delay) in ([0.0] + SpicyLyricsRepository.queuedRetryDelays).enumerated() {
-            if delay > 0 {
-                writeDebugLog("[SpicyLyrics] Track \(trackId) queued (503) — retrying in \(delay)s (attempt \(attempt + 1))")
-                Thread.sleep(forTimeInterval: delay)
-            }
-            let (data, httpStatus) = try performQueryOnce(trackId: trackId)
-            if httpStatus != 503 { return data }
+        let (data, httpStatus) = try performQueryOnce(trackId: trackId)
+        if httpStatus == 503 {
+            writeDebugLog("[SpicyLyrics] Track \(trackId) is queued (503) — falling back to next provider")
+            throw LyricsError.noSuchSong
         }
-        writeDebugLog("[SpicyLyrics] Track \(trackId) still queued after all retries — giving up")
-        throw LyricsError.noSuchSong
+        return data
     }
 
     /// Single request attempt. Returns the raw envelope bytes alongside the

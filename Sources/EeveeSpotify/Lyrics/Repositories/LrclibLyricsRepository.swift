@@ -112,11 +112,8 @@ class LrclibLyricsRepository: LyricsRepository {
         configuration.httpAdditionalHeaders = [
             "User-Agent": "EeveeSpotify v\(EeveeSpotify.version) https://github.com/whoeevee/EeveeSpotify"
         ]
-        // FIX: 4 seconds is far too short — LRCLIB can be slow to respond,
-        // and the IPv4-direct attempt + fallback each consumed the full 4s in
-        // the debug log, causing guaranteed timeouts. Use 10s instead.
-        configuration.timeoutIntervalForRequest = 10
-        configuration.timeoutIntervalForResource = 10
+        configuration.timeoutIntervalForRequest = 3.5
+        configuration.timeoutIntervalForResource = 4.0
         configuration.allowsExpensiveNetworkAccess = true
         configuration.allowsConstrainedNetworkAccess = true
         configuration.waitsForConnectivity = false
@@ -154,20 +151,6 @@ class LrclibLyricsRepository: LyricsRepository {
         }
 
         var request = URLRequest(url: url)
-
-        // Some networks have broken/unroutable IPv6 paths to lrclib.net that cause
-        // ETIMEDOUT at the TCP layer for custom URLSession instances. Resolve to
-        // an IPv4 address explicitly and connect to it directly (TLS hostname
-        // validation against the original host is handled by LrclibTLSDelegate).
-        if let host = url.host, let ip = resolveIPv4(host) {
-            var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            components?.host = ip
-            if let ipUrl = components?.url {
-                request = URLRequest(url: ipUrl)
-                request.setValue(host, forHTTPHeaderField: "Host")
-            }
-        }
-
         request.setValue(
             "EeveeSpotify v\(EeveeSpotify.version) https://github.com/whoeevee/EeveeSpotify",
             forHTTPHeaderField: "User-Agent"
@@ -185,27 +168,6 @@ class LrclibLyricsRepository: LyricsRepository {
 
         task.resume()
         semaphore.wait()
-
-        if error != nil, request.url != url {
-            // IPv4-direct attempt failed; retry with the original hostname URL.
-            writeDebugLog("[LRCLIB] IPv4-direct attempt failed (\(error!)), retrying via hostname")
-
-            let fallbackSemaphore = DispatchSemaphore(value: 0)
-            var fallbackRequest = URLRequest(url: url)
-            fallbackRequest.setValue(
-                "EeveeSpotify v\(EeveeSpotify.version) https://github.com/whoeevee/EeveeSpotify",
-                forHTTPHeaderField: "User-Agent"
-            )
-
-            let fallbackTask = session.dataTask(with: fallbackRequest) { response, _, err in
-                error = err
-                data = response
-                fallbackSemaphore.signal()
-            }
-
-            fallbackTask.resume()
-            fallbackSemaphore.wait()
-        }
 
         if let error = error {
             writeDebugLog("[LRCLIB] Request error for \(stringUrl): \(error)")

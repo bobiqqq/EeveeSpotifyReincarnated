@@ -457,7 +457,7 @@ func getLyricsDataForCurrentTrack(_ originalPath: String, originalLyrics: Lyrics
     // prefetchedResult) through loadCustomLyricsForTrackId itself; only
     // THIS caller stops waiting on it. A slow fetch isn't wasted, it's just
     // no longer something Spotify's own thread sits through.
-    let fallbackTimeout: TimeInterval = 4.0
+    let fallbackTimeout: TimeInterval = 8.5
     let semaphore = DispatchSemaphore(value: 0)
     var fetchedLyrics: Lyrics?
     var fetchedError: Error?
