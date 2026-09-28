@@ -91,8 +91,8 @@ final class EeveeOfflineCoordinator {
                 }
             }
 
-            // Check if track reached enough duration to finalize (e.g. >= 85% or >= 30s)
-            let threshold = duration > 10 ? min(duration * 0.85, 30.0) : 15.0
+            // Check if track reached enough duration to finalize (e.g. >= 90% of duration or at track transition)
+            let threshold = duration > 10 ? (duration * 0.90) : 20.0
             if !self.hasFinalizedCurrentTrack && self.accumulatedRecordedSeconds >= threshold {
                 self.finishRecordingIfNeeded()
             }
@@ -112,7 +112,21 @@ final class EeveeOfflineCoordinator {
         let fm = FileManager.default
         guard fm.fileExists(atPath: tempPath) else { return }
 
-        let finalFileName = "\(trackId).m4a"
+        // Validate that the file has real audio content (at least 100 KB)
+        let attributes = try? fm.attributesOfItem(atPath: tempPath)
+        let size = (attributes?[.size] as? Int64) ?? 0
+        guard size > 100 * 1024 else {
+            writeDebugLog("[OfflineCoordinator] Recording was too short (\(size) bytes) — discarding")
+            try? fm.removeItem(atPath: tempPath)
+            activeRecordingTrackId = nil
+            activeRecordingTempPath = nil
+            return
+        }
+
+        let cleanTitle = self.activeRecordingTitle.isEmpty ? "Track" : self.activeRecordingTitle
+        let cleanArtist = self.activeRecordingArtist.isEmpty ? "Artist" : self.activeRecordingArtist
+        let trackKey = "\(cleanArtist)_\(cleanTitle)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
+        let finalFileName = "\(trackKey).m4a"
         let finalURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(finalFileName)
 
         try? fm.removeItem(at: finalURL)
@@ -121,17 +135,18 @@ final class EeveeOfflineCoordinator {
             
             EeveeOfflineStorageManager.shared.registerDownloadedTrack(
                 trackId: trackId,
-                title: self.activeRecordingTitle,
-                artist: self.activeRecordingArtist,
+                title: cleanTitle,
+                artist: cleanArtist,
                 album: self.activeRecordingAlbum,
                 duration: self.activeRecordingDuration,
                 fileName: finalFileName
             )
 
-            writeDebugLog("[OfflineCoordinator] Successfully saved offline track: \(self.activeRecordingTitle) - \(self.activeRecordingArtist)")
+            let sizeMB = String(format: "%.1f", Double(size) / (1024.0 * 1024.0))
+            writeDebugLog("[OfflineCoordinator] Successfully saved full track: \(cleanTitle) - \(cleanArtist) (\(sizeMB) MB)")
             
             DispatchQueue.main.async {
-                SponsorBlockToast.shared.show("✓ Трек сохранён в офлайн: \(self.activeRecordingTitle)")
+                SponsorBlockToast.shared.show("✓ Сохранен полный трек (\(sizeMB) МБ): \(cleanTitle)")
             }
         } catch {
             writeDebugLog("[OfflineCoordinator] Failed to finalize offline track file: \(error)")

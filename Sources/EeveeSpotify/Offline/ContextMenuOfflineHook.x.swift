@@ -127,12 +127,10 @@ class ContextMenuOfflineHook: ClassHook<UIViewController> {
                 }
                 SponsorBlockToast.shared.show("✓ Удалено из офлайна: \(title)")
             } else {
-                EeveeTrackAudioDownloader.shared.downloadTrack(
-                    trackId: trackKey,
-                    title: title,
-                    artist: artist,
-                    album: ""
-                )
+                EeveeOfflineStorageManager.shared.isAutoCacheEnabled = true
+                let targetURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent("temp_\(trackKey).m4a")
+                EeveeStartAudioRecording(targetURL.path)
+                SponsorBlockToast.shared.show(" Идет запись полного аудиопотока в офлайн...")
             }
             vc?.dismiss(animated: true)
         }, for: .touchUpInside)

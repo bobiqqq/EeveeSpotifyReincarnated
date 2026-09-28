@@ -41,32 +41,23 @@ struct EeveeOfflineSettingsView: View {
                 Button {
                     let title = EeveeDiagnosticsManager.shared.currentTrackTitle
                     let artist = EeveeDiagnosticsManager.shared.currentArtist
-                    let trackId = capturedTrackId ?? UUID().uuidString
                     
                     if title.isEmpty || title == "Not playing" {
                         PopUpHelper.showPopUp(message: "Сначала включите любой трек в плеере Spotify!", buttonText: "OK".uiKitLocalized)
                         return
                     }
                     
-                    let fileName = "\(trackId).m4a"
-                    let targetURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(fileName)
+                    EeveeOfflineStorageManager.shared.isAutoCacheEnabled = true
+                    let trackKey = "\(artist)_\(title)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
+                    let targetURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent("temp_\(trackKey).m4a")
                     EeveeStartAudioRecording(targetURL.path)
                     
-                    EeveeOfflineStorageManager.shared.registerDownloadedTrack(
-                        trackId: trackId,
-                        title: title,
-                        artist: artist,
-                        album: "",
-                        duration: 0,
-                        fileName: fileName
-                    )
-                    refresh()
-                    SponsorBlockToast.shared.show("✓ Трек сохранён в офлайн: \(title)")
+                    SponsorBlockToast.shared.show("🔴 Идет запись полного трека: «\(title)»...")
                 } label: {
                     HStack {
-                        Image(systemName: "arrow.down.circle.fill")
-                            .foregroundColor(Color(hex: "#1ed760"))
-                        Text("Скачать играющий сейчас трек")
+                        Image(systemName: "record.circle.fill")
+                            .foregroundColor(.red)
+                        Text("Записать играющий сейчас трек")
                     }
                 }
             }
