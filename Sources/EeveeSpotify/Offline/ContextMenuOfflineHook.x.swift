@@ -61,7 +61,7 @@ class ContextMenuOfflineHook: ClassHook<UIViewController> {
         
         let icon = UIImage(systemName: isDownloaded ? "trash.fill" : "arrow.down.circle.fill")
         buttonContainer.setImage(icon, for: .normal)
-        buttonContainer.tintColor = isDownloaded ? .systemRed : UIColor(hex: "#1ed760")
+        buttonContainer.tintColor = isDownloaded ? .systemRed : .systemGreen
         buttonContainer.setTitle(isDownloaded ? "  Удалить из офлайна" : "  Скачать в офлайн", for: .normal)
         buttonContainer.setTitleColor(.white, for: .normal)
         buttonContainer.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
