@@ -16,6 +16,13 @@ class UIViewControllerPresentationDiagnosticsHook: ClassHook<UIViewController> {
             
             let lowerMsg = msg.lowercased()
             let lowerTitle = title.lowercased()
+            
+            // Suppress offline "No internet connection" blocking popup
+            if lowerTitle.contains("интернет") || lowerTitle.contains("internet") || lowerMsg.contains("интернет") || lowerMsg.contains("internet") || lowerMsg.contains("подключись") {
+                writeDebugLog("[OFFLINE] Suppressed 'No internet' blocking alert")
+                return
+            }
+            
             if lowerTitle.contains("error") || lowerMsg.contains("available") || lowerMsg.contains("region") || lowerMsg.contains("country") || lowerMsg.contains("license") || lowerMsg.contains("restricted") {
                 writeDebugLog("[REGION/LICENSING ERROR] Popup shown to user: \"\(title)\" - \"\(msg)\"")
             }
