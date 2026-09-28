@@ -149,18 +149,13 @@ class SPTDataLoaderServiceHook: ClassHook<NSObject>, SpotifySessionDelegate {
             // replay. Synthesizing a 200 here keeps Spotify's disk-cached UNPATCHED
             // config (ad flags) from being consumed — the fingerprint behind
             // relaunch crash/ads reports. No persisted copy yet → pass the 304
-            // through; the next real 200 gets patched and persisted.
+            // through; the next real 200 gets patched and persists.
             if let cached = SpotifyResponsePatcher.cachedCustomizeData
                 ?? UserDefaults.cachedCustomizeData,
                let synthetic = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "2.0", headerFields: [:]) {
                 orig.URLSession(session, dataTask: task, didReceiveResponse: synthetic, completionHandler: handler)
                 orig.URLSession(session, dataTask: task, didReceiveData: cached)
                 SpotifyResponsePatcher.markCustomizeTaskHandled(task.taskIdentifier)
-                return
-            }
-            orig.URLSession(session, dataTask: task, didReceiveResponse: response, completionHandler: handler)
-            return
-        }
                 return
             }
             orig.URLSession(session, dataTask: task, didReceiveResponse: response, completionHandler: handler)
