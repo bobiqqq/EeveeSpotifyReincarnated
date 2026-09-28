@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import MediaPlayer
 import AVFoundation
+import EeveeSpotifyC
 
 final class EeveeOfflineCoordinator {
     static let shared = EeveeOfflineCoordinator()
