@@ -268,6 +268,15 @@ private let propertyReplacements = [
     EeveePropertyReplacement(name: "nav_header_listening_activity_enabled", modification: .forceBool(true)),
     EeveePropertyReplacement(name: "is_nav_header_listening_activity_enabled", modification: .forceBool(true)),
     EeveePropertyReplacement(name: "publish_listening_activity", modification: .forceBool(true)),
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Local Files & Offline Playability
+    // ─────────────────────────────────────────────────────────────────────
+    EeveePropertyReplacement(name: "show_local_files", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "enable_local_files", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "local_files_enabled", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "offline_mode_enabled", modification: .forceBool(true)),
+    EeveePropertyReplacement(name: "offline_playback_enabled", modification: .forceBool(true)),
     
     // ─────────────────────────────────────────────────────────────────────
     // Ad on App Open — the "Advertisement" home-screen banner (Pepsi, etc.)

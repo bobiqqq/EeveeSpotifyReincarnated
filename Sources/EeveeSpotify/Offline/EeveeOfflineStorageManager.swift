@@ -186,6 +186,14 @@ final class EeveeOfflineStorageManager {
 
         cachedTracks[trackId] = track
         saveIndexInternal()
+        
+        // Expose to Spotify Documents for native Local Files scanner
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cleanName = "\(artist) - \(title).m4a".replacingOccurrences(of: "/", with: "_")
+        let docMirrorURL = docs.appendingPathComponent(cleanName)
+        try? FileManager.default.removeItem(at: docMirrorURL)
+        try? FileManager.default.copyItem(at: fileURL, to: docMirrorURL)
+        
         writeDebugLog("[OfflineStorage] Registered track: \(title) by \(artist) (\(size / 1024) KB)")
     }
 
@@ -196,6 +204,11 @@ final class EeveeOfflineStorageManager {
         guard let info = cachedTracks.removeValue(forKey: trackId) else { return }
         let fileURL = activeStorageURL.appendingPathComponent(info.relativeFileName)
         try? FileManager.default.removeItem(at: fileURL)
+        
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cleanName = "\(info.artist) - \(info.title).m4a".replacingOccurrences(of: "/", with: "_")
+        try? FileManager.default.removeItem(at: docs.appendingPathComponent(cleanName))
+        
         saveIndexInternal()
     }
 

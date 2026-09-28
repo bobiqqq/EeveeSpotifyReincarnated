@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import EeveeSpotifyC
 
 struct EeveeOfflineSettingsView: View {
     @State private var autoCache = EeveeOfflineStorageManager.shared.isAutoCacheEnabled
@@ -30,12 +31,44 @@ struct EeveeOfflineSettingsView: View {
         List {
             Section(
                 header: Text("Параметры офлайна"),
-                footer: Text("При включении треки автоматически сохраняются в высоком качестве во время прослушивания. Они сразу доступны без интернета в разделе «Локальные файлы».")
+                footer: Text("При включении треки автоматически сохраняются в высоком качестве во время прослушивания. Также можно скачать трек вручную через кнопку ниже или через меню «...» на экране трека.")
             ) {
-                Toggle("Авто-сохранение треков", isOn: $autoCache)
+                Toggle("Авто-сохранение при прослушивании", isOn: $autoCache)
                     .onChange(of: autoCache) { val in
                         EeveeOfflineStorageManager.shared.isAutoCacheEnabled = val
                     }
+
+                Button {
+                    let title = EeveeDiagnosticsManager.shared.currentTrackTitle
+                    let artist = EeveeDiagnosticsManager.shared.currentArtist
+                    let trackId = capturedTrackId ?? UUID().uuidString
+                    
+                    if title.isEmpty || title == "Not playing" {
+                        PopUpHelper.showPopUp(message: "Сначала включите любой трек в плеере Spotify!", buttonText: "OK".uiKitLocalized)
+                        return
+                    }
+                    
+                    let fileName = "\(trackId).m4a"
+                    let targetURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(fileName)
+                    EeveeStartAudioRecording(targetURL.path)
+                    
+                    EeveeOfflineStorageManager.shared.registerDownloadedTrack(
+                        trackId: trackId,
+                        title: title,
+                        artist: artist,
+                        album: "",
+                        duration: 0,
+                        fileName: fileName
+                    )
+                    refresh()
+                    SponsorBlockToast.shared.show("✓ Трек сохранён в офлайн: \(title)")
+                } label: {
+                    HStack {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(Color(hex: "#1ed760"))
+                        Text("Скачать играющий сейчас трек")
+                    }
+                }
             }
 
             Section(
