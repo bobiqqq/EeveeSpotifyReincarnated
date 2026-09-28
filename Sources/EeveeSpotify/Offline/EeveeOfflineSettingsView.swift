@@ -148,12 +148,7 @@ private struct FolderPickerViewControllerRepresentable: UIViewControllerRepresen
     let onFolderPicked: (URL) -> Void
 
     func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker: UIDocumentPickerViewController
-        if #available(iOS 14.0, *) {
-            picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
-        } else {
-            picker = UIDocumentPickerViewController(documentTypes: [kUTTypeFolder as String], in: .open)
-        }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder], asCopy: false)
         picker.delegate = context.coordinator
         picker.allowsMultipleSelection = false
         return picker
