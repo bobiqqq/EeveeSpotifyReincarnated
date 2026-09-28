@@ -28,7 +28,7 @@ final class EeveeOfflineStorageManager {
 
     var isAutoCacheEnabled: Bool {
         get {
-            UserDefaults.standard.object(forKey: autoCacheEnabledKey) as? Bool ?? true
+            UserDefaults.standard.object(forKey: autoCacheEnabledKey) as? Bool ?? false
         }
         set {
             UserDefaults.standard.set(newValue, forKey: autoCacheEnabledKey)

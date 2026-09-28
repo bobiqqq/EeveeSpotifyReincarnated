@@ -2,7 +2,21 @@ import Foundation
 import Orion
 
 // Bearer token captured from premium-relevant requests; reused by lyrics fetch etc.
-public var spotifyAccessToken: String?
+private let tokenLock = NSLock()
+private var _spotifyAccessToken: String?
+
+public var spotifyAccessToken: String? {
+    get {
+        tokenLock.lock()
+        defer { tokenLock.unlock() }
+        return _spotifyAccessToken
+    }
+    set {
+        tokenLock.lock()
+        defer { tokenLock.unlock() }
+        _spotifyAccessToken = newValue
+    }
+}
 
 // Spotify's primary URLSession delegate (wg-spclient: bootstrap, customize, PAM).
 // Patching lives in SpotifyResponsePatcher so HttpClientURLSessionHook can share it.
