@@ -133,19 +133,6 @@ struct EeveeSettingsView: View {
 
             Button {
                 pushSettingsController(
-                    with: EeveeListeningStatsView(),
-                    title: "Статистика"
-                )
-            } label: {
-                NavigationSectionView(
-                    color: Color(hex: "#1ed760"),
-                    title: "Статистика прослушиваний",
-                    imageSystemName: "chart.bar.xaxis"
-                )
-            }
-
-            Button {
-                pushSettingsController(
                     with: EeveeDiagnosticsView(),
                     title: "Диагностика"
                 )

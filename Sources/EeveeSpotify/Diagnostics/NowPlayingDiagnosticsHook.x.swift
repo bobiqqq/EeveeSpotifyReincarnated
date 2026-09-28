@@ -1,7 +1,7 @@
 import Orion
 import MediaPlayer
 
-class MPNowPlayingInfoCenterStatsHook: ClassHook<MPNowPlayingInfoCenter> {
+class MPNowPlayingInfoCenterDiagnosticsHook: ClassHook<MPNowPlayingInfoCenter> {
     func setNowPlayingInfo(_ info: [String: Any]?) {
         orig.setNowPlayingInfo(info)
         guard let info = info else { return }
@@ -20,14 +20,6 @@ class MPNowPlayingInfoCenterStatsHook: ClassHook<MPNowPlayingInfoCenter> {
             isPlaying: isPlaying,
             position: elapsed,
             duration: duration
-        )
-
-        EeveeListeningStatsManager.shared.recordPlaybackTick(
-            trackId: capturedTrackId ?? "",
-            title: title,
-            artist: artist,
-            isPlaying: isPlaying,
-            position: elapsed
         )
 
         if let trackId = capturedTrackId, !trackId.isEmpty {
