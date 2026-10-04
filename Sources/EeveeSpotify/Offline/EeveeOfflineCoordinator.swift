@@ -59,8 +59,7 @@ final class EeveeOfflineCoordinator {
             self.accumulatedSeconds = 0
             self.lastTickUptime = ProcessInfo.processInfo.systemUptime
 
-            let tempFileName = "temp_\(trackKey).m4a"
-            let tempURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(tempFileName)
+            let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rec_\(UUID().uuidString).m4a")
             self.recordingTempPath = tempURL.path
 
             EeveeStartAudioRecording(tempURL.path)
@@ -156,14 +155,26 @@ final class EeveeOfflineCoordinator {
 
         let cleanTitle = targetTitle.isEmpty ? "Track" : targetTitle
         let cleanArtist = targetArtist.isEmpty ? "Artist" : targetArtist
-        let trackKey = "\(cleanArtist)_\(cleanTitle)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
+        let trackKey = "\(cleanArtist) - \(cleanTitle)".replacingOccurrences(of: "/", with: "_")
         let finalFileName = "\(trackKey).m4a"
         let finalURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(finalFileName)
 
-        try? fm.removeItem(at: finalURL)
-        do {
-            try fm.moveItem(atPath: tempPath, toPath: finalURL.path)
-            
+        // Capture artwork if available
+        var artworkImage: UIImage? = nil
+        if let art = MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork {
+            artworkImage = art.image(at: CGSize(width: 500, height: 500))
+        }
+
+        AudioMetadataTagger.tagM4A(
+            inputURL: URL(fileURLWithPath: tempPath),
+            outputURL: finalURL,
+            title: cleanTitle,
+            artist: cleanArtist,
+            album: self.targetAlbum,
+            artwork: artworkImage
+        ) { _ in
+            try? fm.removeItem(atPath: tempPath)
+
             EeveeOfflineStorageManager.shared.registerDownloadedTrack(
                 trackId: trackId,
                 title: cleanTitle,
@@ -173,14 +184,13 @@ final class EeveeOfflineCoordinator {
                 fileName: finalFileName
             )
 
-            let sizeMB = String(format: "%.1f", Double(size) / (1024.0 * 1024.0))
-            writeDebugLog("[OfflineCoordinator] Successfully saved full track: \(cleanTitle) - \(cleanArtist) (\(sizeMB) MB)")
-            
+            let finalSize = (try? fm.attributesOfItem(atPath: finalURL.path)[.size] as? Int64) ?? size
+            let sizeMB = String(format: "%.1f", Double(finalSize) / (1024.0 * 1024.0))
+            writeDebugLog("[OfflineCoordinator] Successfully saved full tagged track: \(cleanTitle) - \(cleanArtist) (\(sizeMB) MB)")
+
             DispatchQueue.main.async {
                 SponsorBlockToast.shared.show("✓ Сохранен в «Добавленные файлы» (\(sizeMB) МБ): \(cleanTitle)")
             }
-        } catch {
-            writeDebugLog("[OfflineCoordinator] Failed to move file: \(error)")
         }
 
         resetTarget()

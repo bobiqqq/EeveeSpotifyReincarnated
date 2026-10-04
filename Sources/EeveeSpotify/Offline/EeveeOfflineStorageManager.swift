@@ -191,8 +191,11 @@ final class EeveeOfflineStorageManager {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cleanName = "\(artist) - \(title).m4a".replacingOccurrences(of: "/", with: "_")
         let docMirrorURL = docs.appendingPathComponent(cleanName)
-        try? FileManager.default.removeItem(at: docMirrorURL)
-        try? FileManager.default.copyItem(at: fileURL, to: docMirrorURL)
+        
+        if fileURL.path != docMirrorURL.path {
+            try? FileManager.default.removeItem(at: docMirrorURL)
+            try? FileManager.default.copyItem(at: fileURL, to: docMirrorURL)
+        }
         
         writeDebugLog("[OfflineStorage] Registered track: \(title) by \(artist) (\(size / 1024) KB)")
     }
@@ -207,7 +210,10 @@ final class EeveeOfflineStorageManager {
         
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cleanName = "\(info.artist) - \(info.title).m4a".replacingOccurrences(of: "/", with: "_")
-        try? FileManager.default.removeItem(at: docs.appendingPathComponent(cleanName))
+        let docMirrorURL = docs.appendingPathComponent(cleanName)
+        if fileURL.path != docMirrorURL.path {
+            try? FileManager.default.removeItem(at: docMirrorURL)
+        }
         
         saveIndexInternal()
     }

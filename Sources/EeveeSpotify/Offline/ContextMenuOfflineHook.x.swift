@@ -83,35 +83,19 @@ class ContextMenuOfflineHook: ClassHook<UIViewController> {
         // Combine seamlessly with table header
         let originalHeader = tableView.tableHeaderView
         let newHeader = UIView()
+        let rowHeight: CGFloat = 52
         
         if let original = originalHeader {
-            original.translatesAutoresizingMaskIntoConstraints = false
+            let origHeight = original.frame.height
+            newHeader.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: origHeight + rowHeight)
+            original.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: origHeight)
             newHeader.addSubview(original)
             
-            rowContainer.translatesAutoresizingMaskIntoConstraints = false
+            rowContainer.frame = CGRect(x: 0, y: origHeight, width: tableView.bounds.width, height: rowHeight)
             newHeader.addSubview(rowContainer)
-            
-            NSLayoutConstraint.activate([
-                original.topAnchor.constraint(equalTo: newHeader.topAnchor),
-                original.leadingAnchor.constraint(equalTo: newHeader.leadingAnchor),
-                original.trailingAnchor.constraint(equalTo: newHeader.trailingAnchor),
-                
-                rowContainer.topAnchor.constraint(equalTo: original.bottomAnchor, constant: 4),
-                rowContainer.leadingAnchor.constraint(equalTo: newHeader.leadingAnchor),
-                rowContainer.trailingAnchor.constraint(equalTo: newHeader.trailingAnchor),
-                rowContainer.heightAnchor.constraint(equalToConstant: 48),
-                rowContainer.bottomAnchor.constraint(equalTo: newHeader.bottomAnchor, constant: -4)
-            ])
-            
-            newHeader.frame = CGRect(
-                x: 0,
-                y: 0,
-                width: tableView.bounds.width,
-                height: original.frame.height + 56
-            )
         } else {
-            rowContainer.frame = CGRect(x: 0, y: 4, width: tableView.bounds.width, height: 48)
-            newHeader.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 56)
+            newHeader.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: rowHeight)
+            rowContainer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: rowHeight)
             newHeader.addSubview(rowContainer)
         }
         
