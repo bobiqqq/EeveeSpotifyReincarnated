@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 import EeveeSpotifyC
 
 struct EeveeOfflineSettingsView: View {
-    @State private var autoCache = EeveeOfflineStorageManager.shared.isAutoCacheEnabled
     @State private var isShowingPicker = false
     @State private var tracks: [OfflineTrackInfo] = []
     @State private var totalSize: Int64 = 0
@@ -30,14 +29,9 @@ struct EeveeOfflineSettingsView: View {
     var body: some View {
         List {
             Section(
-                header: Text("Параметры офлайна"),
-                footer: Text("При включении треки автоматически сохраняются в высоком качестве во время прослушивания. Также можно скачать трек вручную через кнопку ниже или через меню «...» на экране трека.")
+                header: Text("Ручная загрузка"),
+                footer: Text("Вы можете сохранить трек в офлайн прямо во время воспроизведения через кнопку выше, либо нажав «...» в меню любого трека в приложении. Скачанная музыка сразу появляется в разделе «Добавленные файлы» в Медиатеке.")
             ) {
-                Toggle("Авто-сохранение при прослушивании", isOn: $autoCache)
-                    .onChange(of: autoCache) { val in
-                        EeveeOfflineStorageManager.shared.isAutoCacheEnabled = val
-                    }
-
                 Button {
                     let title = EeveeDiagnosticsManager.shared.currentTrackTitle
                     let artist = EeveeDiagnosticsManager.shared.currentArtist
@@ -46,18 +40,18 @@ struct EeveeOfflineSettingsView: View {
                         PopUpHelper.showPopUp(message: "Сначала включите любой трек в плеере Spotify!", buttonText: "OK".uiKitLocalized)
                         return
                     }
-                    
-                    EeveeOfflineStorageManager.shared.isAutoCacheEnabled = true
-                    let trackKey = "\(artist)_\(title)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
-                    let targetURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent("temp_\(trackKey).m4a")
-                    EeveeStartAudioRecording(targetURL.path)
-                    
-                    SponsorBlockToast.shared.show("🔴 Идет запись полного трека: «\(title)»...")
+
+                    EeveeOfflineCoordinator.shared.startManualDownload(
+                        trackId: capturedTrackId ?? "",
+                        title: title,
+                        artist: artist
+                    )
+                    refresh()
                 } label: {
                     HStack {
-                        Image(systemName: "record.circle.fill")
-                            .foregroundColor(.red)
-                        Text("Записать играющий сейчас трек")
+                        Image(systemName: "arrow.down.circle.fill")
+                            .foregroundColor(Color(hex: "#1ed760"))
+                        Text("Скачать играющий сейчас трек")
                     }
                 }
             }
@@ -110,7 +104,7 @@ struct EeveeOfflineSettingsView: View {
                 }
 
                 if tracks.isEmpty {
-                    Text("Пока нет сохранённых треков. Включите любой трек — он автоматически сохранится в офлайн.")
+                    Text("Пока нет сохранённых треков. Нажмите «...» на любом треке -> «Скачать в офлайн».")
                         .font(.footnote)
                         .foregroundColor(.gray)
                 } else {

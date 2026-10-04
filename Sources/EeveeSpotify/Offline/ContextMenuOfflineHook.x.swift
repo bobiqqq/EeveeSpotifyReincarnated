@@ -16,14 +16,14 @@ class ContextMenuOfflineHook: ClassHook<UIViewController> {
         let clsName = NSStringFromClass(type(of: target))
         guard clsName.contains("ContextMenuViewController") else { return }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak target] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak target] in
             guard let target = target else { return }
-            self.attachOfflineActionButton(to: target)
+            self.attachOfflineRow(to: target)
         }
     }
 
-    private func attachOfflineActionButton(to vc: UIViewController) {
-        // Find labels in header to extract Title and Artist
+    private func attachOfflineRow(to vc: UIViewController) {
+        // Collect labels from the header to get track title and artist
         var foundLabels: [UILabel] = []
         
         func collectLabels(in view: UIView) {
@@ -53,73 +53,72 @@ class ContextMenuOfflineHook: ClassHook<UIViewController> {
         
         guard let tableView = findTableView(in: vc.view) else { return }
         
-        let buttonTag = 948271
-        if tableView.viewWithTag(buttonTag) != nil { return }
+        let rowTag = 948271
+        if tableView.viewWithTag(rowTag) != nil { return }
         
-        // Deterministic track identifier for this context menu item
         let trackKey = "\(artist)_\(title)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
         let isDownloaded = EeveeOfflineStorageManager.shared.isTrackDownloaded(trackId: trackKey)
             || (capturedTrackId.map { EeveeOfflineStorageManager.shared.isTrackDownloaded(trackId: $0) } ?? false)
         
-        // Native Spotify-styled Action Button Row
-        let rowButton = UIButton(type: .custom)
-        rowButton.tag = buttonTag
-        rowButton.backgroundColor = UIColor.white.withAlphaComponent(0.06)
-        rowButton.layer.cornerRadius = 8
-        rowButton.clipsToBounds = true
-        rowButton.contentHorizontalAlignment = .left
+        // Build a native-styled Spotify Action Row
+        let rowContainer = UIButton(type: .custom)
+        rowContainer.tag = rowTag
+        rowContainer.backgroundColor = .clear
+        rowContainer.contentHorizontalAlignment = .left
         
-        let iconConfig = UIImage.SymbolConfiguration(pointSize: 18, weight: .medium)
-        let iconName = isDownloaded ? "trash.fill" : "arrow.down.circle.fill"
+        let iconConfig = UIImage.SymbolConfiguration(pointSize: 20, weight: .regular)
+        let iconName = isDownloaded ? "trash" : "arrow.down.circle"
         let icon = UIImage(systemName: iconName, withConfiguration: iconConfig)
-        rowButton.setImage(icon, for: .normal)
-        rowButton.tintColor = isDownloaded ? .systemRed : UIColor(red: 0.12, green: 0.84, blue: 0.38, alpha: 1.0)
         
-        let buttonTitle = isDownloaded ? "  Удалить из офлайна" : "  Скачать в офлайн"
-        rowButton.setTitle(buttonTitle, for: .normal)
-        rowButton.setTitleColor(.white, for: .normal)
-        rowButton.titleLabel?.font = UIFont.systemFont(ofSize: 15, weight: .semibold)
-        rowButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
+        rowContainer.setImage(icon, for: .normal)
+        rowContainer.tintColor = isDownloaded ? UIColor.systemRed : UIColor.white
         
-        // Create or update tableHeaderView cleanly
+        let titleString = isDownloaded ? "   Удалить из офлайна" : "   Скачать в офлайн"
+        rowContainer.setTitle(titleString, for: .normal)
+        rowContainer.setTitleColor(.white, for: .normal)
+        rowContainer.setTitleColor(UIColor.white.withAlphaComponent(0.6), for: .highlighted)
+        rowContainer.titleLabel?.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        rowContainer.contentEdgeInsets = UIEdgeInsets(top: 0, left: 24, bottom: 0, right: 24)
+        
+        // Combine seamlessly with table header
         let originalHeader = tableView.tableHeaderView
-        let newHeaderContainer = UIView()
+        let newHeader = UIView()
         
         if let original = originalHeader {
             original.translatesAutoresizingMaskIntoConstraints = false
-            newHeaderContainer.addSubview(original)
+            newHeader.addSubview(original)
             
-            rowButton.translatesAutoresizingMaskIntoConstraints = false
-            newHeaderContainer.addSubview(rowButton)
+            rowContainer.translatesAutoresizingMaskIntoConstraints = false
+            newHeader.addSubview(rowContainer)
             
             NSLayoutConstraint.activate([
-                original.topAnchor.constraint(equalTo: newHeaderContainer.topAnchor),
-                original.leadingAnchor.constraint(equalTo: newHeaderContainer.leadingAnchor),
-                original.trailingAnchor.constraint(equalTo: newHeaderContainer.trailingAnchor),
+                original.topAnchor.constraint(equalTo: newHeader.topAnchor),
+                original.leadingAnchor.constraint(equalTo: newHeader.leadingAnchor),
+                original.trailingAnchor.constraint(equalTo: newHeader.trailingAnchor),
                 
-                rowButton.topAnchor.constraint(equalTo: original.bottomAnchor, constant: 8),
-                rowButton.leadingAnchor.constraint(equalTo: newHeaderContainer.leadingAnchor, constant: 16),
-                rowButton.trailingAnchor.constraint(equalTo: newHeaderContainer.trailingAnchor, constant: -16),
-                rowButton.heightAnchor.constraint(equalToConstant: 44),
-                rowButton.bottomAnchor.constraint(equalTo: newHeaderContainer.bottomAnchor, constant: -8)
+                rowContainer.topAnchor.constraint(equalTo: original.bottomAnchor, constant: 4),
+                rowContainer.leadingAnchor.constraint(equalTo: newHeader.leadingAnchor),
+                rowContainer.trailingAnchor.constraint(equalTo: newHeader.trailingAnchor),
+                rowContainer.heightAnchor.constraint(equalToConstant: 48),
+                rowContainer.bottomAnchor.constraint(equalTo: newHeader.bottomAnchor, constant: -4)
             ])
             
-            newHeaderContainer.frame = CGRect(
+            newHeader.frame = CGRect(
                 x: 0,
                 y: 0,
                 width: tableView.bounds.width,
-                height: original.frame.height + 60
+                height: original.frame.height + 56
             )
         } else {
-            rowButton.frame = CGRect(x: 16, y: 8, width: tableView.bounds.width - 32, height: 44)
-            newHeaderContainer.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 60)
-            newHeaderContainer.addSubview(rowButton)
+            rowContainer.frame = CGRect(x: 0, y: 4, width: tableView.bounds.width, height: 48)
+            newHeader.frame = CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 56)
+            newHeader.addSubview(rowContainer)
         }
         
-        tableView.tableHeaderView = newHeaderContainer
+        tableView.tableHeaderView = newHeader
         
         // Action Handler
-        rowButton.addAction(UIAction { [weak vc] _ in
+        rowContainer.addAction(UIAction { [weak vc] _ in
             if isDownloaded {
                 EeveeOfflineStorageManager.shared.deleteTrack(trackId: trackKey)
                 if let cid = capturedTrackId {
@@ -127,10 +126,11 @@ class ContextMenuOfflineHook: ClassHook<UIViewController> {
                 }
                 SponsorBlockToast.shared.show("✓ Удалено из офлайна: \(title)")
             } else {
-                EeveeOfflineStorageManager.shared.isAutoCacheEnabled = true
-                let targetURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent("temp_\(trackKey).m4a")
-                EeveeStartAudioRecording(targetURL.path)
-                SponsorBlockToast.shared.show(" Идет запись полного аудиопотока в офлайн...")
+                EeveeOfflineCoordinator.shared.startManualDownload(
+                    trackId: capturedTrackId ?? trackKey,
+                    title: title,
+                    artist: artist
+                )
             }
             vc?.dismiss(animated: true)
         }, for: .touchUpInside)

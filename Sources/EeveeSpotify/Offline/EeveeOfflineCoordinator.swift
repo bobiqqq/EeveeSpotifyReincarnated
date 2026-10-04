@@ -9,18 +9,71 @@ final class EeveeOfflineCoordinator {
 
     private let queue = DispatchQueue(label: "com.eevee.offline.coordinator", qos: .utility)
     
-    private var activeRecordingTrackId: String?
-    private var activeRecordingTitle: String = ""
-    private var activeRecordingArtist: String = ""
-    private var activeRecordingAlbum: String = ""
-    private var activeRecordingDuration: Double = 0
-    private var activeRecordingTempPath: String?
-    private var accumulatedRecordedSeconds: Double = 0
-    private var lastRecordedUptime: TimeInterval = 0
-    private var hasFinalizedCurrentTrack: Bool = false
+    // Explicit manual download state
+    private var targetTrackId: String?
+    private var targetTitle: String = ""
+    private var targetArtist: String = ""
+    private var targetAlbum: String = ""
+    private var targetDuration: Double = 0
+    private var recordingTempPath: String?
+    private var accumulatedSeconds: Double = 0
+    private var lastTickUptime: TimeInterval = 0
+    private var isRecordingThisTrack: Bool = false
 
     private init() {}
 
+    /// Triggered explicitly by the user (Context Menu or Settings)
+    func startManualDownload(
+        trackId: String,
+        title: String,
+        artist: String,
+        album: String = "",
+        duration: Double = 0
+    ) {
+        guard !title.isEmpty, title != "Not playing" else {
+            PopUpHelper.showPopUp(message: "Включите трек в плеере Spotify!", buttonText: "OK".uiKitLocalized)
+            return
+        }
+
+        queue.async {
+            let trackKey = "\(artist)_\(title)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
+            let idToUse = trackId.isEmpty ? trackKey : trackId
+
+            // If already downloaded
+            if EeveeOfflineStorageManager.shared.isTrackDownloaded(trackId: idToUse) ||
+               EeveeOfflineStorageManager.shared.isTrackDownloaded(trackId: trackKey) {
+                DispatchQueue.main.async {
+                    SponsorBlockToast.shared.show("✓ Трек уже есть в офлайне: \(title)")
+                }
+                return
+            }
+
+            // Stop any previous recording
+            self.cancelRecordingInternal()
+
+            self.targetTrackId = idToUse
+            self.targetTitle = title
+            self.targetArtist = artist
+            self.targetAlbum = album
+            self.targetDuration = duration
+            self.accumulatedSeconds = 0
+            self.lastTickUptime = ProcessInfo.processInfo.systemUptime
+
+            let tempFileName = "temp_\(trackKey).m4a"
+            let tempURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(tempFileName)
+            self.recordingTempPath = tempURL.path
+
+            EeveeStartAudioRecording(tempURL.path)
+            self.isRecordingThisTrack = true
+
+            writeDebugLog("[OfflineCoordinator] Manual recording started for: \(title) by \(artist)")
+            DispatchQueue.main.async {
+                SponsorBlockToast.shared.show("🔴 Запись в офлайн: «\(title)». Дослушайте трек для сохранения.")
+            }
+        }
+    }
+
+    /// Called by MPNowPlayingInfoCenterDiagnosticsHook on playback ticks
     func handlePlaybackUpdate(
         trackId: String,
         title: String,
@@ -30,101 +83,79 @@ final class EeveeOfflineCoordinator {
         position: Double,
         duration: Double
     ) {
-        guard EeveeOfflineStorageManager.shared.isAutoCacheEnabled else {
-            if EeveeIsAudioRecording() {
-                EeveeStopAudioRecording()
-            }
-            return
-        }
-
-        guard !trackId.isEmpty, !title.isEmpty else { return }
-
         queue.async {
+            guard self.isRecordingThisTrack, let activeId = self.targetTrackId else { return }
+
+            let trackKey = "\(artist)_\(title)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
+            let matches = (trackId == activeId) || (title == self.targetTitle && artist == self.targetArtist) || (trackKey == activeId)
+
             let nowUptime = ProcessInfo.processInfo.systemUptime
 
-            // Check if track changed
-            if let currentId = self.activeRecordingTrackId, currentId != trackId {
-                self.finishRecordingIfNeeded()
-            }
-
-            // If already downloaded, do nothing
-            if EeveeOfflineStorageManager.shared.isTrackDownloaded(trackId: trackId) {
+            // Track changed away before completing
+            if !matches {
+                writeDebugLog("[OfflineCoordinator] User switched track away from \(self.targetTitle). Finalizing if enough recorded.")
+                self.finishRecordingInternal()
                 return
             }
 
-            // Start new recording session
-            if self.activeRecordingTrackId != trackId {
-                self.activeRecordingTrackId = trackId
-                self.activeRecordingTitle = title
-                self.activeRecordingArtist = artist
-                self.activeRecordingAlbum = album
-                self.activeRecordingDuration = duration
-                self.accumulatedRecordedSeconds = 0
-                self.hasFinalizedCurrentTrack = false
-                self.lastRecordedUptime = nowUptime
-
-                let tempFileName = "temp_\(trackId).m4a"
-                let tempURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(tempFileName)
-                self.activeRecordingTempPath = tempURL.path
-
-                if isPlaying {
-                    EeveeStartAudioRecording(tempURL.path)
-                }
-                return
+            if self.targetDuration <= 0 && duration > 0 {
+                self.targetDuration = duration
             }
 
-            // Accumulate playback time while recording
-            if isPlaying && self.lastRecordedUptime > 0 {
-                let delta = nowUptime - self.lastRecordedUptime
+            // Accumulate playtime
+            if isPlaying && self.lastTickUptime > 0 {
+                let delta = nowUptime - self.lastTickUptime
                 if delta > 0 && delta < 5.0 {
-                    self.accumulatedRecordedSeconds += delta
+                    self.accumulatedSeconds += delta
                 }
             }
-            self.lastRecordedUptime = nowUptime
+            self.lastTickUptime = nowUptime
 
-            // Auto-pause / resume recording based on player state
+            // If user paused, pause recording
             if !isPlaying && EeveeIsAudioRecording() {
                 EeveeStopAudioRecording()
-            } else if isPlaying && !EeveeIsAudioRecording() && !self.hasFinalizedCurrentTrack {
-                if let path = self.activeRecordingTempPath {
+            } else if isPlaying && !EeveeIsAudioRecording() {
+                if let path = self.recordingTempPath {
                     EeveeStartAudioRecording(path)
                 }
             }
 
-            // Check if track reached enough duration to finalize (e.g. >= 90% of duration or at track transition)
-            let threshold = duration > 10 ? (duration * 0.90) : 20.0
-            if !self.hasFinalizedCurrentTrack && self.accumulatedRecordedSeconds >= threshold {
-                self.finishRecordingIfNeeded()
+            // If reached near end (>= 85% of track duration)
+            if self.targetDuration > 15 && self.accumulatedSeconds >= (self.targetDuration * 0.85) {
+                self.finishRecordingInternal()
             }
         }
     }
 
-    private func finishRecordingIfNeeded() {
-        guard let trackId = activeRecordingTrackId,
-              let tempPath = activeRecordingTempPath,
-              !hasFinalizedCurrentTrack else {
+    private func finishRecordingInternal() {
+        guard isRecordingThisTrack,
+              let trackId = targetTrackId,
+              let tempPath = recordingTempPath else {
             return
         }
 
-        hasFinalizedCurrentTrack = true
+        isRecordingThisTrack = false
         EeveeStopAudioRecording()
 
         let fm = FileManager.default
-        guard fm.fileExists(atPath: tempPath) else { return }
-
-        // Validate that the file has real audio content (at least 100 KB)
-        let attributes = try? fm.attributesOfItem(atPath: tempPath)
-        let size = (attributes?[.size] as? Int64) ?? 0
-        guard size > 100 * 1024 else {
-            writeDebugLog("[OfflineCoordinator] Recording was too short (\(size) bytes) — discarding")
-            try? fm.removeItem(atPath: tempPath)
-            activeRecordingTrackId = nil
-            activeRecordingTempPath = nil
+        guard fm.fileExists(atPath: tempPath) else {
+            resetTarget()
             return
         }
 
-        let cleanTitle = self.activeRecordingTitle.isEmpty ? "Track" : self.activeRecordingTitle
-        let cleanArtist = self.activeRecordingArtist.isEmpty ? "Artist" : self.activeRecordingArtist
+        let attributes = try? fm.attributesOfItem(atPath: tempPath)
+        let size = (attributes?[.size] as? Int64) ?? 0
+
+        // Minimum valid audio size (at least 150 KB)
+        guard size > 150 * 1024 else {
+            writeDebugLog("[OfflineCoordinator] Recording was too short (\(size) bytes) — cancelled")
+            try? fm.removeItem(atPath: tempPath)
+            resetTarget()
+            return
+        }
+
+        let cleanTitle = targetTitle.isEmpty ? "Track" : targetTitle
+        let cleanArtist = targetArtist.isEmpty ? "Artist" : targetArtist
         let trackKey = "\(cleanArtist)_\(cleanTitle)".replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: " ", with: "_")
         let finalFileName = "\(trackKey).m4a"
         let finalURL = EeveeOfflineStorageManager.shared.activeStorageURL.appendingPathComponent(finalFileName)
@@ -137,8 +168,8 @@ final class EeveeOfflineCoordinator {
                 trackId: trackId,
                 title: cleanTitle,
                 artist: cleanArtist,
-                album: self.activeRecordingAlbum,
-                duration: self.activeRecordingDuration,
+                album: self.targetAlbum,
+                duration: self.targetDuration,
                 fileName: finalFileName
             )
 
@@ -146,13 +177,34 @@ final class EeveeOfflineCoordinator {
             writeDebugLog("[OfflineCoordinator] Successfully saved full track: \(cleanTitle) - \(cleanArtist) (\(sizeMB) MB)")
             
             DispatchQueue.main.async {
-                SponsorBlockToast.shared.show("✓ Сохранен полный трек (\(sizeMB) МБ): \(cleanTitle)")
+                SponsorBlockToast.shared.show("✓ Сохранен в «Добавленные файлы» (\(sizeMB) МБ): \(cleanTitle)")
             }
         } catch {
-            writeDebugLog("[OfflineCoordinator] Failed to finalize offline track file: \(error)")
+            writeDebugLog("[OfflineCoordinator] Failed to move file: \(error)")
         }
 
-        activeRecordingTrackId = nil
-        activeRecordingTempPath = nil
+        resetTarget()
+    }
+
+    private func cancelRecordingInternal() {
+        if isRecordingThisTrack {
+            isRecordingThisTrack = false
+            EeveeStopAudioRecording()
+            if let path = recordingTempPath {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+            resetTarget()
+        }
+    }
+
+    private func resetTarget() {
+        targetTrackId = nil
+        targetTitle = ""
+        targetArtist = ""
+        targetAlbum = ""
+        targetDuration = 0
+        recordingTempPath = nil
+        accumulatedSeconds = 0
+        lastTickUptime = 0
     }
 }
