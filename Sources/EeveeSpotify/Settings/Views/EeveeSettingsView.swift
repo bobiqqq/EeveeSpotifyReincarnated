@@ -133,19 +133,6 @@ struct EeveeSettingsView: View {
 
             Button {
                 pushSettingsController(
-                    with: EeveeOfflineSettingsView(),
-                    title: "Офлайн-режим"
-                )
-            } label: {
-                NavigationSectionView(
-                    color: Color(hex: "#1ed760"),
-                    title: "Офлайн-режим и музыка",
-                    imageSystemName: "arrow.down.circle.fill"
-                )
-            }
-
-            Button {
-                pushSettingsController(
                     with: EeveeDiagnosticsView(),
                     title: "Диагностика"
                 )

@@ -25,16 +25,6 @@ class MPNowPlayingInfoCenterDiagnosticsHook: ClassHook<MPNowPlayingInfoCenter> {
 
         if let trackId = capturedTrackId, !trackId.isEmpty {
             prefetchLyricsIfNeeded(trackId: trackId)
-            
-            EeveeOfflineCoordinator.shared.handlePlaybackUpdate(
-                trackId: trackId,
-                title: title,
-                artist: artist,
-                album: album,
-                isPlaying: isPlaying,
-                position: elapsed,
-                duration: duration
-            )
         }
     }
 }
