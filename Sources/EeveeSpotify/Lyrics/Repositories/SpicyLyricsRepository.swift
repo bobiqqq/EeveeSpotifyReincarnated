@@ -33,11 +33,7 @@ class SpicyLyricsRepository: LyricsRepository {
 
     private static let apiUrl        = "https://api.spicylyrics.org"
     private static let authHeaderKey = "SpicyLyrics-WebAuth"
-    // Bumped to match the real client's shipped ProjectVersion
-    // (project/config.ts). Version alone was a dead end for the
-    // Static/Line-vs-Syllable discrepancy — see the "X-mode" header below,
-    // added alongside this bump, which is the actual missing piece.
-    private static let clientVersion = "6.3.142"
+    private static let clientVersion = "6.4.10"
 
     // MARK: - Token wait
     //
@@ -57,11 +53,55 @@ class SpicyLyricsRepository: LyricsRepository {
     // MARK: - Network
 
     private func performQuery(trackId: String) throws -> Data {
+        let personalKey = UserDefaults.spicyLyricsKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !personalKey.isEmpty {
+            do {
+                writeDebugLog("[SpicyLyrics] Using personal API key for \(trackId)")
+                return try performV1Request(trackId: trackId, key: personalKey)
+            } catch {
+                writeDebugLog("[SpicyLyrics] v1 request failed with personal key (\(error)), trying query")
+            }
+        }
+
         let (data, httpStatus) = try performQueryOnce(trackId: trackId)
         if httpStatus == 503 {
             writeDebugLog("[SpicyLyrics] Track \(trackId) is queued (503) — falling back to next provider")
             throw LyricsError.noSuchSong
         }
+        return data
+    }
+
+    private func performV1Request(trackId: String, key: String) throws -> Data {
+        guard let url = URL(string: "\(SpicyLyricsRepository.apiUrl)/v1/lyrics/\(trackId)") else {
+            throw LyricsError.decodingError
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("SpicyLyrics-iOS/\(SpicyLyricsRepository.clientVersion)", forHTTPHeaderField: "User-Agent")
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var responseData: Data?
+        var responseError: Error?
+        var statusCode = 0
+
+        session.dataTask(with: request) { data, response, error in
+            responseData = data
+            responseError = error
+            statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            semaphore.signal()
+        }.resume()
+
+        semaphore.wait()
+
+        if let error = responseError { throw error }
+        if statusCode == 404 { throw LyricsError.noSuchSong }
+        guard statusCode == 200, let data = responseData else {
+            writeDebugLog("[SpicyLyrics] v1 returned HTTP \(statusCode)")
+            throw LyricsError.decodingError
+        }
+
         return data
     }
 
@@ -183,6 +223,27 @@ class SpicyLyricsRepository: LyricsRepository {
     // MARK: - Parse
 
     private func parseLyricsData(_ data: Data, trackId: String, query: LyricsSearchQuery, options: LyricsOptions) throws -> LyricsDto {
+        // 1. Direct v1 API response check (when using personal API key)
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let status = json["Status"] as? Int,
+           let body = json["Body"] as? [String: Any] {
+            if status == 404 { throw LyricsError.noSuchSong }
+            guard status == 200 else {
+                writeDebugLog("[SpicyLyrics] v1 error status: \(status)")
+                throw LyricsError.noSuchSong
+            }
+            let packed = SLObjPackValue.fromAny(body)
+            guard let type = packed["Type"]?.stringValue else { throw LyricsError.decodingError }
+            writeDebugLog("[SpicyLyrics] v1 lyrics type=\(type) for \(trackId)")
+            switch type {
+            case "Syllable": return parseSyllableLyrics(packed, trackId: trackId, query: query, options: options)
+            case "Line":     return parseLineLyrics(packed)
+            case "Static":   return parseStaticLyrics(packed)
+            default:         throw LyricsError.decodingError
+            }
+        }
+
+        // 2. /query envelope response check (via captured Spotify token)
         guard
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let queriesRaw = json["queries"] as? [[String: Any]]
@@ -192,11 +253,6 @@ class SpicyLyricsRepository: LyricsRepository {
             throw LyricsError.decodingError
         }
 
-        // The server may prepend extra entries ahead of the real query result
-        // (e.g. a "_notice" block with no "operationId"/"result"). The real
-        // Spicetify client never assumes index 0 — it looks results up by
-        // operationId via queries.get("0") — so we match that instead of
-        // blindly taking queriesRaw.first.
         guard
             let matchedQuery = queriesRaw.first(where: { $0["operationId"] as? String == "0" }),
             let result = matchedQuery["result"] as? [String: Any]
@@ -215,9 +271,8 @@ class SpicyLyricsRepository: LyricsRepository {
         case 200:
             break
         case 401, 403:
-            // Auth failure — token was stale or rejected. Clear it so the next
-            // attempt re-waits for a fresh one.
-            writeDebugLog("[SpicyLyrics] Auth error \(httpStatus) for \(trackId) — clearing cached token")
+            let errorDetail = String(describing: result["data"] ?? "")
+            writeDebugLog("[SpicyLyrics] Auth error \(httpStatus) for \(trackId): \(errorDetail) — clearing cached token")
             spotifyAccessToken = nil
             throw LyricsError.noSuchSong
         default:

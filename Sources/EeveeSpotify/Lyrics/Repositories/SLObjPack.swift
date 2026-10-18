@@ -227,4 +227,15 @@ extension SLObjPackValue {
         guard let arr = arrayValue, index < arr.count else { return nil }
         return arr[index]
     }
+
+    static func fromAny(_ any: Any) -> SLObjPackValue {
+        switch any {
+        case let b as Bool: return .bool(b)
+        case let n as NSNumber: return .number(n.doubleValue)
+        case let s as String: return .string(s)
+        case let arr as [Any]: return .array(arr.map { fromAny($0) })
+        case let dict as [String: Any]: return .object(dict.mapValues { fromAny($0) })
+        default: return .null
+        }
+    }
 }

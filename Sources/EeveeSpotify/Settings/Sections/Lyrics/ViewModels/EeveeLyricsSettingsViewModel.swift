@@ -9,6 +9,9 @@ class EeveeLyricsSettingsViewModel: ObservableObject {
     }
     
     @Published var musixmatchToken = UserDefaults.musixmatchToken
+    @Published var spicyLyricsKey: String = UserDefaults.spicyLyricsKey {
+        didSet { UserDefaults.spicyLyricsKey = spicyLyricsKey }
+    }
     @Published var isRequestingMusixmatchToken = false
     @Published var musixmatchTokenInputAlertPublisher = PassthroughSubject<Bool, Never>()
     var isMusixmatchTokenValid: Bool { getMusixmatchToken(musixmatchToken) != nil }

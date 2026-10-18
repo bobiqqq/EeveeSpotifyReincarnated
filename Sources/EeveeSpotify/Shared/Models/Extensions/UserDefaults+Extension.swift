@@ -15,6 +15,16 @@ extension UserDefaults {
     private static let cachedCustomizeDataKey = "eeveeCachedCustomizeData"
     private static let iconNamePrettifyKey = "iconNamePrettify"
     private static let cleanShareLinksKey = "cleanShareLinks"
+    private static let spicyLyricsKeyKey = "spicyLyricsKey"
+
+    static var spicyLyricsKey: String {
+        get {
+            container.string(forKey: spicyLyricsKeyKey) ?? ""
+        }
+        set (key) {
+            container.set(key, forKey: spicyLyricsKeyKey)
+        }
+    }
 
     static var musixmatchToken: String {
         get {

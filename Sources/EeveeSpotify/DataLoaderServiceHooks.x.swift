@@ -31,15 +31,21 @@ class SPTDataLoaderServiceHook: ClassHook<NSObject>, SpotifySessionDelegate {
         didCompleteWithError error: Error?
     ) {
         if let request = task.currentRequest,
+           let urlString = request.url?.absoluteString,
            let headers = request.allHTTPHeaderFields,
            let auth = headers["Authorization"] ?? headers["authorization"],
            auth.hasPrefix("Bearer ") {
             let token = String(auth.dropFirst(7))
-            spotifyAccessToken = token
-            // TEMP DEBUG: log token shape + source URL, never the token itself.
-            let dotCount = token.filter { $0 == "." }.count
-            let shape = "len=\(token.count) dots=\(dotCount) prefix=\(token.prefix(6))"
-            writeDebugLog("[TokenCapture] \(shape) from \(task.currentRequest?.url?.absoluteString ?? "<no url>")")
+            let isUserAuthEndpoint = urlString.contains("/identity/") ||
+                                     urlString.contains("/bootstrap/") ||
+                                     urlString.contains("/user-customization-service/") ||
+                                     urlString.contains("api.spotify.com")
+            if spotifyAccessToken == nil || isUserAuthEndpoint {
+                spotifyAccessToken = token
+                let dotCount = token.filter { $0 == "." }.count
+                let shape = "len=\(token.count) dots=\(dotCount) prefix=\(token.prefix(6))"
+                writeDebugLog("[TokenCapture] Updated token (\(shape)) from \(urlString)")
+            }
         }
 
         guard let url = task.currentRequest?.url else {

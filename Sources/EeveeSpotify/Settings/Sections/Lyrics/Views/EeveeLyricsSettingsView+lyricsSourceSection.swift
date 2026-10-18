@@ -51,8 +51,25 @@ extension EeveeLyricsSettingsView {
                 if viewModel.lyricsSource == .lrclib {
                     lrclibURLField()
                 }
+
+                if viewModel.lyricsSource == .spicylyrics {
+                    spicyLyricsKeyField()
+                }
             }
         }
+    }
+
+    @ViewBuilder private func spicyLyricsKeyField() -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("API-ключ SpicyLyrics (опционально)")
+                .font(.subheadline)
+            
+            TextField("sl_pk_... (с developers.spicylyrics.org)", text: $viewModel.spicyLyricsKey)
+                .foregroundColor(.gray)
+                .autocapitalization(.none)
+                .disableAutocorrection(true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     @ViewBuilder private func musixmatchTokenField() -> some View {
