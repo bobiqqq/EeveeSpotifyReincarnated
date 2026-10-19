@@ -493,6 +493,133 @@ class SpicyLyricsRepository: LyricsRepository {
         LyricsDto(lines: [], timeSynced: false, romanization: .original)
     }
 
+    // MARK: - lrc.red Word-Synced Fallback
+
+    private func fetchLrcRedLyrics(query: LyricsSearchQuery, trackId: String, options: LyricsOptions) throws -> LyricsDto {
+        let cleanTitle = query.title
+            .replacingOccurrences(of: #"(?i)\s*-\s*.*$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)\b(?:feat\.?|ft\.?|featuring)\s+.*$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"[\(\[].*?[\)\]]"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let searchKeywords = "\(cleanTitle) \(query.primaryArtist)"
+        guard let encoded = searchKeywords.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let searchUrl = URL(string: "https://lrc.red/search.json?q=\(encoded)") else {
+            throw LyricsError.noSuchSong
+        }
+
+        var searchReq = URLRequest(url: searchUrl)
+        searchReq.timeoutInterval = 4.0
+        searchReq.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", forHTTPHeaderField: "User-Agent")
+
+        let sema = DispatchSemaphore(value: 0)
+        var searchData: Data?
+        session.dataTask(with: searchReq) { data, _, _ in
+            searchData = data
+            sema.signal()
+        }.resume()
+        sema.wait()
+
+        guard let sData = searchData,
+              let searchJson = try? JSONSerialization.jsonObject(with: sData) as? [String: Any],
+              let hits = searchJson["hits"] as? [[String: Any]],
+              let firstHit = hits.first,
+              let isrc = firstHit["isrc"] as? String,
+              !isrc.isEmpty else {
+            writeDebugLog("[LrcRed] No search hit for '\(searchKeywords)'")
+            throw LyricsError.noSuchSong
+        }
+
+        guard let songUrl = URL(string: "https://lrc.red/s/\(isrc).song.json") else {
+            throw LyricsError.noSuchSong
+        }
+
+        var songReq = URLRequest(url: songUrl)
+        songReq.timeoutInterval = 5.0
+        songReq.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 16_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", forHTTPHeaderField: "User-Agent")
+
+        let sema2 = DispatchSemaphore(value: 0)
+        var songData: Data?
+        session.dataTask(with: songReq) { data, _, _ in
+            songData = data
+            sema2.signal()
+        }.resume()
+        sema2.wait()
+
+        guard let sgData = songData,
+              let songJson = try? JSONSerialization.jsonObject(with: sgData) as? [String: Any],
+              let lyricsObj = songJson["lyrics"] as? [String: Any],
+              let rawLines = lyricsObj["lines"] as? [[String: Any]],
+              !rawLines.isEmpty else {
+            writeDebugLog("[LrcRed] Empty or invalid song.json for isrc \(isrc)")
+            throw LyricsError.noSuchSong
+        }
+
+        var lines = [LyricsLineDto]()
+        var karaokeLines = [KaraokeLineDto]()
+
+        for rawLine in rawLines {
+            let lineText = (rawLine["text"] as? String) ?? ""
+            let lineBegin = (rawLine["begin"] as? Double) ?? 0.0
+            let lineEnd = (rawLine["end"] as? Double) ?? lineBegin
+            let startMs = Int(lineBegin * 1000)
+            let endMs = Int(lineEnd * 1000)
+
+            lines.append(LyricsLineDto(content: lineText.lyricsNoteIfEmpty, offsetMs: startMs))
+
+            if let wordsGroups = rawLine["words"] as? [[[String: Any]]], !wordsGroups.isEmpty {
+                var lineSyllables = [KaraokeSyllableDto]()
+                for wordGroup in wordsGroups {
+                    for (idx, syl) in wordGroup.enumerated() {
+                        let sylText = (syl["text"] as? String) ?? ""
+                        let sylBegin = (syl["begin"] as? Double) ?? lineBegin
+                        let sylEnd = (syl["end"] as? Double) ?? sylBegin
+                        let isPartOfWord = (idx < wordGroup.count - 1)
+                        lineSyllables.append(KaraokeSyllableDto(
+                            text: sylText,
+                            startMs: Int(sylBegin * 1000),
+                            endMs: Int(sylEnd * 1000),
+                            isPartOfWord: isPartOfWord
+                        ))
+                    }
+                }
+                if !lineSyllables.isEmpty {
+                    karaokeLines.append(KaraokeLineDto(
+                        syllables: lineSyllables,
+                        startMs: startMs,
+                        endMs: endMs
+                    ))
+                }
+            }
+        }
+
+        if !karaokeLines.isEmpty {
+            let filledKaraoke = LyricsUncensorFill.fillKaraoke(
+                lines: karaokeLines,
+                query: query,
+                options: options
+            )
+            let normalized = SpicyLyricsRepository.normalizeMonotonicTiming(filledKaraoke)
+            KaraokeLyricsStore.shared.set(
+                trackId: trackId,
+                lyrics: KaraokeLyricsDto(
+                    lines: normalized,
+                    songWriters: [],
+                    providerCode: "aml",
+                    providerDisplayName: "Apple Music (lrc.red)"
+                )
+            )
+            writeDebugLog("[LrcRed] Stored word-synced karaoke: \(karaokeLines.count) lines for \(trackId)")
+        } else {
+            writeDebugLog("[LrcRed] Loaded line-synced lyrics: \(lines.count) lines for \(trackId)")
+        }
+
+        let romanization: LyricsRomanizationStatus = lines.map(\.content).canBeRomanized
+            ? .canBeRomanized : .original
+
+        return LyricsDto(lines: lines, timeSynced: true, romanization: romanization)
+    }
+
     // MARK: - LyricsRepository
 
     func getLyrics(_ query: LyricsSearchQuery, options: LyricsOptions) throws -> LyricsDto {
@@ -501,17 +628,31 @@ class SpicyLyricsRepository: LyricsRepository {
             writeDebugLog("[SpicyLyrics] Empty track ID")
             throw LyricsError.noSuchSong
         }
-        let data = try performQuery(trackId: trackId)
-        var dto = try parseLyricsData(data, trackId: trackId, query: query, options: options)
+
+        var dto: LyricsDto?
+        do {
+            let data = try performQuery(trackId: trackId)
+            dto = try parseLyricsData(data, trackId: trackId, query: query, options: options)
+        } catch {
+            writeDebugLog("[SpicyLyrics] Primary request failed (\(error)). Trying lrc.red word-sync fallback...")
+            dto = try? fetchLrcRedLyrics(query: query, trackId: trackId, options: options)
+            if dto == nil {
+                throw error
+            }
+        }
+
+        guard var resultDto = dto else {
+            throw LyricsError.noSuchSong
+        }
 
         let filledContents = LyricsUncensorFill.fill(
-            lines: dto.lines.map(\.content),
+            lines: resultDto.lines.map(\.content),
             query: query,
             options: options
         )
-        for (index, content) in filledContents.enumerated() where index < dto.lines.count {
-            dto.lines[index].content = content
+        for (index, content) in filledContents.enumerated() where index < resultDto.lines.count {
+            resultDto.lines[index].content = content
         }
-        return dto
+        return resultDto
     }
 }
