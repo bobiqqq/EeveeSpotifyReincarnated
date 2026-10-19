@@ -13,23 +13,7 @@ class HttpClientURLSessionHook: ClassHook<NSObject>, SpotifySessionDelegate {
         task: URLSessionDataTask,
         didCompleteWithError error: Error?
     ) {
-        if let request = task.currentRequest,
-           let urlString = request.url?.absoluteString,
-           let headers = request.allHTTPHeaderFields,
-           let auth = headers["Authorization"] ?? headers["authorization"],
-           auth.hasPrefix("Bearer ") {
-            let token = String(auth.dropFirst(7))
-            let isUserAuthEndpoint = urlString.contains("/identity/") ||
-                                     urlString.contains("/bootstrap/") ||
-                                     urlString.contains("/user-customization-service/") ||
-                                     urlString.contains("api.spotify.com")
-            if spotifyAccessToken == nil || isUserAuthEndpoint {
-                spotifyAccessToken = token
-                let dotCount = token.filter { $0 == "." }.count
-                let shape = "len=\(token.count) dots=\(dotCount) prefix=\(token.prefix(6))"
-                writeDebugLog("[TokenCapture] Updated token (\(shape)) from \(urlString)")
-            }
-        }
+        captureAccessToken(from: task.currentRequest)
 
         guard let url = task.currentRequest?.url else {
             orig.URLSession(session, task: task, didCompleteWithError: error)
