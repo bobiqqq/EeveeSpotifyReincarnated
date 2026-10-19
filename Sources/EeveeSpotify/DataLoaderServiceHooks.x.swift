@@ -134,16 +134,7 @@ class SPTDataLoaderServiceHook: ClassHook<NSObject>, SpotifySessionDelegate {
         }
 
         if let url = task.currentRequest?.url, url.isCustomize, response.statusCode == 304 {
-<<<<<<< HEAD
-            // Warm relaunch: customize revalidates via ETag → 304, no body. Fall back
-            // to the persisted patched copy and force 200 so the consumer accepts the
-            // replay. Synthesizing a 200 here keeps Spotify's disk-cached UNPATCHED
-            // config (ad flags) from being consumed — the fingerprint behind
-            // relaunch crash/ads reports. No persisted copy yet → pass the 304
-            // through; the next real 200 gets patched and persists.
-=======
             // A 304 would make Spotify use its unpatched disk-cached config, so replay ours as a 200.
->>>>>>> upstream/Master
             if let cached = SpotifyResponsePatcher.cachedCustomizeData
                 ?? UserDefaults.cachedCustomizeData,
                let synthetic = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "2.0", headerFields: [:]) {
