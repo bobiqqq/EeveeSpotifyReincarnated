@@ -32,9 +32,6 @@ jobs:
           - scheme: rootless
             label: rootless
             theos_repository: theos/theos
-          - scheme: roothide
-            label: RootHide
-            theos_repository: roothide/theos
 
     env:
       THEOS: ${{ github.workspace }}/theos
@@ -151,27 +148,3 @@ jobs:
           name: EeveeSpotify-${{ matrix.label }}-DEB
           path: Outputs/DEBS/*.deb
           if-no-files-found: error
-
-  draft-release:
-    name: Create draft release
-    needs: build-debs
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download both packages
-        uses: actions/download-artifact@v4
-        with:
-          pattern: EeveeSpotify-*-DEB
-          path: Outputs/DEBS
-          merge-multiple: true
-
-      - name: Draft GitHub Release and attach both .debs
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ inputs.tag }}
-          target_commitish: ${{ github.sha }}
-          name: ${{ inputs.release_name != '' && inputs.release_name || inputs.tag }}
-          draft: true
-          prerelease: ${{ inputs.prerelease == 'true' }}
-          files: Outputs/DEBS/*.deb
